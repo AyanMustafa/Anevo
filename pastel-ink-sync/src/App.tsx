@@ -13,23 +13,30 @@ const queryClient = new QueryClient();
 
 // Check if user is authenticated
 const isAuthenticated = () => {
-  const token = localStorage.getItem("token");
-  return !!token;
+  try {
+    const token = localStorage.getItem("token");
+    const user = localStorage.getItem("user");
+    // Both token and user must exist
+    return !!token && !!user;
+  } catch (error) {
+    console.error("Error checking authentication:", error);
+    return false;
+  }
 };
 
 // Protected Route - redirect to login if not authenticated
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  if (!isAuthenticated()) {
+  const authenticated = isAuthenticated();
+  console.log("ProtectedRoute - authenticated:", authenticated);
+  
+  if (!authenticated) {
     return <Navigate to="/login" replace />;
   }
   return <>{children}</>;
 };
 
-// Public Route - allow access, but redirect if already logged in
+// Public Route - allow access without redirect
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
-  if (isAuthenticated()) {
-    return <Navigate to="/" replace />;
-  }
   return <>{children}</>;
 };
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -18,37 +18,62 @@ export const useNotes = () => {
   const [sharedNotes, setSharedNotes] = useState<Note[]>([]);
   const token = localStorage.getItem("token");
 
-  const fetchNotes = async () => {
-    if (!token) return;
+  console.log("🔑 useNotes - Token from localStorage:", token ? `${token.substring(0, 20)}...` : "NULL");
+
+  const fetchNotes = useCallback(async () => {
+    if (!token) {
+      console.log("❌ fetchNotes - No token found");
+      return;
+    }
+    
+    console.log("📡 fetchNotes - Sending request with token:", token.substring(0, 20) + "...");
     
     try {
-      const res = await fetch(`${API_BASE_URL}/notes?token=${token}`);
+      const res = await fetch(`${API_BASE_URL}/notes`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+      
+      console.log("📥 fetchNotes - Response status:", res.status);
+      
       if (res.ok) {
         const data = await res.json();
-        setNotes(data.notes || []);
+        console.log("✅ fetchNotes - Success! Data:", data);
+        // Backend returns array directly, not wrapped in {notes: []}
+        setNotes(Array.isArray(data) ? data : []);
       } else if (res.status === 401) {
+        console.log("🚫 fetchNotes - 401 Unauthorized! Redirecting to login...");
         // Token expired or invalid
         localStorage.removeItem("token");
-        window.location.href = "/";
+        localStorage.removeItem("user");
+        window.location.href = "/login";
+      } else {
+        console.log("⚠️ fetchNotes - Unexpected status:", res.status);
       }
     } catch (error) {
       console.error("Error fetching notes:", error);
     }
-  };
+  }, [token]);
 
-  const fetchSharedNotes = async () => {
+  const fetchSharedNotes = useCallback(async () => {
     if (!token) return;
     
     try {
-      const res = await fetch(`${API_BASE_URL}/notes/shared?token=${token}`);
+      const res = await fetch(`${API_BASE_URL}/notes/shared`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+      
       if (res.ok) {
         const data = await res.json();
-        setSharedNotes(data.notes || []);
+        setSharedNotes(Array.isArray(data) ? data : []);
       }
     } catch (error) {
       console.error("Error fetching shared notes:", error);
     }
-  };
+  }, [token]);
 
   const addNote = async (note: Omit<Note, "id">) => {
     if (!token) {
@@ -57,9 +82,12 @@ export const useNotes = () => {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/notes?token=${token}`, {
+      const res = await fetch(`${API_BASE_URL}/notes`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         body: JSON.stringify(note),
       });
 
@@ -81,8 +109,11 @@ export const useNotes = () => {
     if (!token) return;
 
     try {
-      const res = await fetch(`${API_BASE_URL}/notes/${id}?token=${token}`, {
+      const res = await fetch(`${API_BASE_URL}/notes/${id}`, {
         method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
       });
 
       if (res.ok) {
@@ -102,9 +133,12 @@ export const useNotes = () => {
     if (!token) return;
 
     try {
-      const res = await fetch(`${API_BASE_URL}/notes/${id}?token=${token}`, {
+      const res = await fetch(`${API_BASE_URL}/notes/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         body: JSON.stringify(updates),
       });
 
@@ -126,9 +160,12 @@ export const useNotes = () => {
     if (!token) return { success: false, message: "No token found" };
 
     try {
-      const res = await fetch(`${API_BASE_URL}/notes/${noteId}/share?token=${token}`, {
+      const res = await fetch(`${API_BASE_URL}/notes/${noteId}/share`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         body: JSON.stringify({ username, can_edit: canEdit }),
       });
 
@@ -149,8 +186,11 @@ export const useNotes = () => {
     if (!token) return false;
 
     try {
-      const res = await fetch(`${API_BASE_URL}/notes/${noteId}/share/${username}?token=${token}`, {
+      const res = await fetch(`${API_BASE_URL}/notes/${noteId}/share/${username}`, {
         method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
       });
 
       if (res.ok) {
@@ -200,7 +240,7 @@ export const useNotes = () => {
         ws.close();
       }
     };
-  }, [token]);
+  }, [token, fetchNotes, fetchSharedNotes]);
 
   return { 
     notes, 
