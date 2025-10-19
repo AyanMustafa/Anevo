@@ -91,7 +91,7 @@ export default function Login() {
             <FileText className="h-12 w-12 text-[#9B8370]" />
           )}
           <h1 className="text-3xl font-bold text-gray-800">
-            Note Sharing Application
+            Anevo
           </h1>
         </div>
         

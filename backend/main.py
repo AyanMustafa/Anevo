@@ -9,10 +9,15 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean
 from sqlalchemy.orm import sessionmaker, declarative_base, Session, relationship
 import os
 import json
+from dotenv import load_dotenv
+load_dotenv()  # ✅ this loads .env variables into os.environ
+
+
 
 # Google token verification
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
+
 
 # ==========================================
 #  CONFIGURATION
