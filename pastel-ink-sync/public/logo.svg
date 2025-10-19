@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="512" viewBox="0 0 1024 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Anevo Logo (Cute)</title>
+  <rect width="1024" height="512" rx="40" fill="#FFFCF6"/>
+  <!-- Icon: smiling notebook -->
+  <g transform="translate(96,96)">
+    <rect x="0" y="0" width="256" height="256" rx="48" fill="#FFD9B3" stroke="#4A2E2A" stroke-width="12"/>
+    <!-- Top binding bar -->
+    <rect x="40" y="28" width="176" height="20" rx="10" fill="#F2C49C"/>
+    <!-- A letter stylized -->
+    <path d="M83 140 L128 60 L173 140 Z M105 120 L151 120" fill="none" stroke="#4A2E2A" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Eyes -->
+    <circle cx="96" cy="168" r="12" fill="#4A2E2A"/>
+    <circle cx="160" cy="168" r="12" fill="#4A2E2A"/>
+    <!-- Blush -->
+    <circle cx="76" cy="188" r="10" fill="#FFB6B6" opacity="0.9"/>
+    <circle cx="180" cy="188" r="10" fill="#FFB6B6" opacity="0.9"/>
+    <!-- Smile -->
+    <path d="M106 196 Q128 212 150 196" stroke="#4A2E2A" stroke-width="10" fill="none" stroke-linecap="round"/>
+    <!-- Page line -->
+    <rect x="82" y="220" width="92" height="12" rx="6" fill="#4A2E2A" opacity="0.85"/>
+    <!-- Sparkles -->
+    <g transform="translate(222,-10)" stroke="#B7C8FF" stroke-width="6" stroke-linecap="round">
+      <path d="M20 0 L20 16"/><path d="M12 8 L28 8"/>
+    </g>
+    <g transform="translate(-18,208)" stroke="#D6C8FF" stroke-width="6" stroke-linecap="round">
+      <path d="M20 0 L20 16"/><path d="M12 8 L28 8"/>
+    </g>
+  </g>
+
+  <!-- Wordmark -->
+  <g transform="translate(392,180)">
+    <text x="0" y="80"
+          font-family="Poppins, Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif"
+          font-weight="700"
+          font-size="120"
+          fill="#4A2E2A"
+          letter-spacing="4">ANEVO</text>
+    <!-- Tagline (optional, comment out if not needed)
+    <text x="4" y="140" font-family="Inter, system-ui" font-size="28" fill="#6E564F">notes that grow with you</text>
+    -->
+  </g>
+</svg>

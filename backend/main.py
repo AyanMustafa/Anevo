@@ -1,28 +1,32 @@
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime
+from passlib.context import CryptContext
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey, Text
 from sqlalchemy.orm import sessionmaker, declarative_base, Session, relationship
 import os
 import json
 
 # Google token verification
 from google.oauth2 import id_token
-from google.auth.transport import requests as grequests
+from google.auth.transport import requests as google_requests
 
 # ==========================================
 #  CONFIGURATION
 # ==========================================
-SECRET_KEY = os.environ.get("SECRET_KEY", "supersecretkey")
+SECRET_KEY = os.environ.get("SECRET_KEY", "supersecretkey-change-this-in-production")
 ALGORITHM = "HS256"
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 app = FastAPI()
 
-# Allow React frontend to connect from multiple origins
+# CORS Configuration - Allow ALL origins for testing
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins for testing
@@ -39,11 +43,20 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+# Update your User model to support both auth methods
 class User(Base):
     __tablename__ = "users"
+    
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True, nullable=False)
-    password = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    username = Column(String, unique=True, index=True, nullable=True)
+    name = Column(String, nullable=True)
+    hashed_password = Column(String, nullable=True)
+    google_id = Column(String, unique=True, nullable=True)
+    auth_provider = Column(String, default="local")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+    
     notes = relationship("Note", back_populates="owner", cascade="all, delete-orphan")
     shared_with_me = relationship("SharedNote", foreign_keys="SharedNote.shared_with_user_id", back_populates="shared_with_user")
 
@@ -66,7 +79,7 @@ class SharedNote(Base):
     shared_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     shared_with_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     shared_at = Column(DateTime, default=datetime.utcnow)
-    can_edit = Column(Integer, default=0)  # 0 = read-only, 1 = can edit
+    can_edit = Column(Integer, default=0)
     
     note = relationship("Note", back_populates="shared_instances")
     shared_with_user = relationship("User", foreign_keys=[shared_with_user_id], back_populates="shared_with_me")
@@ -77,16 +90,20 @@ Base.metadata.create_all(bind=engine)
 # ==========================================
 #  PYDANTIC MODELS
 # ==========================================
-class RegisterRequest(BaseModel):
+class UserCreate(BaseModel):
+    email: EmailStr
     username: str
     password: str
+    name: Optional[str] = None
 
-class LoginRequest(BaseModel):
-    username: str
+class UserLogin(BaseModel):
+    identifier: str  # Can be either email or username
     password: str
 
 class TokenResponse(BaseModel):
-    token: str
+    access_token: str
+    token_type: str
+    user: dict
 
 class NoteRequest(BaseModel):
     title: str
@@ -115,10 +132,10 @@ class MessageResponse(BaseModel):
     message: str
 
 class GoogleAuthRequest(BaseModel):
-    id_token: str
+    token: str
 
 class ShareNoteRequest(BaseModel):
-    username: str  # Changed from email to username
+    username: str
     can_edit: bool = False
 
 class ShareNoteResponse(BaseModel):
@@ -128,12 +145,23 @@ class ShareNoteResponse(BaseModel):
 # ==========================================
 #  HELPER FUNCTIONS
 # ==========================================
-def create_token(username: str):
-    payload = {
-        "sub": username,
-        "exp": datetime.utcnow() + timedelta(hours=24)
-    }
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+def get_password_hash(password: str) -> str:
+    # Truncate password to 72 bytes (bcrypt limitation)
+    if len(password.encode('utf-8')) > 72:
+        password = password[:72]
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    # Truncate password to 72 bytes (bcrypt limitation)
+    if len(plain_password.encode('utf-8')) > 72:
+        plain_password = plain_password[:72]
+    return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(hours=24)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def verify_token(token: str):
     try:
@@ -146,10 +174,10 @@ def verify_google_token(token: str):
     try:
         if GOOGLE_CLIENT_ID:
             idinfo = id_token.verify_oauth2_token(
-                token, grequests.Request(), GOOGLE_CLIENT_ID
+                token, google_requests.Request(), GOOGLE_CLIENT_ID
             )
         else:
-            idinfo = id_token.verify_oauth2_token(token, grequests.Request())
+            idinfo = id_token.verify_oauth2_token(token, google_requests.Request())
         return idinfo
     except Exception as e:
         print(f"Google token verification error: {e}")
@@ -165,51 +193,178 @@ def get_db():
 # ==========================================
 #  AUTH ENDPOINTS
 # ==========================================
-@app.post("/register", response_model=MessageResponse)
-def register(req: RegisterRequest, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(User.username == req.username).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="User already exists")
-    
-    user = User(username=req.username, password=req.password)
-    db.add(user)
-    db.commit()
-    return {"message": "User registered successfully"}
+@app.post("/auth/register", response_model=TokenResponse)
+async def register(user: UserCreate, db: Session = Depends(get_db)):
+    try:
+        # Validate password length
+        if len(user.password) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters long")
+        
+        if len(user.password) > 72:
+            raise HTTPException(status_code=400, detail="Password cannot be longer than 72 characters")
+        
+        # Check if user with email already exists
+        db_user = db.query(User).filter(User.email == user.email).first()
+        if db_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Check if username already exists
+        db_user = db.query(User).filter(User.username == user.username).first()
+        if db_user:
+            raise HTTPException(status_code=400, detail="Username already taken")
+        
+        # Create new user
+        hashed_password = get_password_hash(user.password)
+        new_user = User(
+            email=user.email,
+            username=user.username,
+            name=user.name or user.username,
+            hashed_password=hashed_password,
+            auth_provider="local"
+        )
+        
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        # Create access token
+        access_token = create_access_token(data={"sub": new_user.email})
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": new_user.id,
+                "email": new_user.email,
+                "username": new_user.username,
+                "name": new_user.name
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Registration error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
-@app.post("/login", response_model=TokenResponse)
-def login(req: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == req.username).first()
-    if not user or user.password != req.password:
+@app.post("/auth/login", response_model=TokenResponse)
+async def login(user_login: UserLogin, db: Session = Depends(get_db)):
+    # Check if identifier is email or username
+    db_user = db.query(User).filter(
+        (User.email == user_login.identifier) | 
+        (User.username == user_login.identifier)
+    ).first()
+    
+    if not db_user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    token = create_token(user.username)
-    return {"token": token}
+    # Check if user is Google OAuth user (no password)
+    if db_user.auth_provider == "google":
+        raise HTTPException(
+            status_code=400, 
+            detail="This account uses Google sign-in. Please use 'Sign in with Google' button."
+        )
+    
+    # Verify password
+    if not verify_password(user_login.password, db_user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Create access token
+    access_token = create_access_token(data={"sub": db_user.email})
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": db_user.id,
+            "email": db_user.email,
+            "username": db_user.username,
+            "name": db_user.name
+        }
+    }
 
 @app.post("/auth/google", response_model=TokenResponse)
-def auth_google(req: GoogleAuthRequest, db: Session = Depends(get_db)):
-    idinfo = verify_google_token(req.id_token)
-    email = idinfo.get("email")
-    
-    if not email:
-        raise HTTPException(status_code=400, detail="Email not found in Google token")
-    
-    user = db.query(User).filter(User.username == email).first()
-    if not user:
-        user = User(username=email, password="google_oauth_user")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    
-    token = create_token(user.username)
-    return {"token": token}
+async def google_auth(req: GoogleAuthRequest, db: Session = Depends(get_db)):
+    try:
+        # Verify the Google token
+        idinfo = id_token.verify_oauth2_token(
+            req.token, 
+            google_requests.Request(), 
+            GOOGLE_CLIENT_ID
+        )
+
+        # Extract user info from Google
+        email = idinfo['email']
+        name = idinfo.get('name', email.split('@')[0])
+        google_id = idinfo['sub']
+
+        # Check if user exists
+        db_user = db.query(User).filter(User.email == email).first()
+        
+        if db_user:
+            # User exists - check if it's a Google OAuth user
+            if db_user.auth_provider != "google":
+                raise HTTPException(
+                    status_code=400,
+                    detail="This email is registered with username/password. Please use regular login."
+                )
+            
+            # Update user info if changed
+            db_user.name = name
+            db_user.google_id = google_id
+            db.commit()
+            db.refresh(db_user)
+        else:
+            # Create new Google OAuth user
+            # Generate a unique username from email
+            base_username = email.split('@')[0]
+            username = base_username
+            counter = 1
+            
+            while db.query(User).filter(User.username == username).first():
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            db_user = User(
+                email=email,
+                username=username,
+                name=name,
+                google_id=google_id,
+                auth_provider="google",
+                hashed_password=None
+            )
+            
+            db.add(db_user)
+            db.commit()
+            db.refresh(db_user)
+        
+        # Create JWT token
+        access_token = create_access_token(data={"sub": db_user.email})
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": db_user.id,
+                "email": db_user.email,
+                "username": db_user.username,
+                "name": db_user.name
+            }
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid Google token: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Authentication failed: {str(e)}")
 
 # ==========================================
 #  NOTES ENDPOINTS
 # ==========================================
 @app.get("/notes", response_model=NotesListResponse)
 def get_notes(token: str, db: Session = Depends(get_db)):
-    username = verify_token(token)
-    user = db.query(User).filter(User.username == username).first()
+    email = verify_token(token)
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -235,8 +390,8 @@ def get_notes(token: str, db: Session = Depends(get_db)):
 
 @app.get("/notes/shared", response_model=NotesListResponse)
 def get_shared_notes(token: str, db: Session = Depends(get_db)):
-    username = verify_token(token)
-    user = db.query(User).filter(User.username == username).first()
+    email = verify_token(token)
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -263,8 +418,8 @@ def get_shared_notes(token: str, db: Session = Depends(get_db)):
 
 @app.post("/notes", response_model=MessageResponse)
 def create_note(note: NoteRequest, token: str, db: Session = Depends(get_db)):
-    username = verify_token(token)
-    user = db.query(User).filter(User.username == username).first()
+    email = verify_token(token)
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -282,8 +437,8 @@ def create_note(note: NoteRequest, token: str, db: Session = Depends(get_db)):
 
 @app.put("/notes/{note_id}", response_model=MessageResponse)
 def update_note(note_id: int, note: NoteUpdateRequest, token: str, db: Session = Depends(get_db)):
-    username = verify_token(token)
-    user = db.query(User).filter(User.username == username).first()
+    email = verify_token(token)
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -317,8 +472,8 @@ def update_note(note_id: int, note: NoteUpdateRequest, token: str, db: Session =
 
 @app.delete("/notes/{note_id}", response_model=MessageResponse)
 def delete_note(note_id: int, token: str, db: Session = Depends(get_db)):
-    username = verify_token(token)
-    user = db.query(User).filter(User.username == username).first()
+    email = verify_token(token)
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -333,8 +488,8 @@ def delete_note(note_id: int, token: str, db: Session = Depends(get_db)):
 
 @app.post("/notes/{note_id}/share", response_model=ShareNoteResponse)
 def share_note(note_id: int, share_req: ShareNoteRequest, token: str, db: Session = Depends(get_db)):
-    username = verify_token(token)
-    user = db.query(User).filter(User.username == username).first()
+    email = verify_token(token)
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -378,8 +533,8 @@ def share_note(note_id: int, share_req: ShareNoteRequest, token: str, db: Sessio
 
 @app.delete("/notes/{note_id}/share/{username}", response_model=MessageResponse)
 def unshare_note(note_id: int, username: str, token: str, db: Session = Depends(get_db)):
-    current_username = verify_token(token)
-    user = db.query(User).filter(User.username == current_username).first()
+    email = verify_token(token)
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     

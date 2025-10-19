@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Edit2, Save, X, Lock } from "lucide-react";
+import { Trash2, Edit2, Save, X, Lock, Eye } from "lucide-react";
 import { Note } from "@/hooks/useNotes";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import ShareNoteDialog from "./ShareNoteDialog";
 
 interface NoteCardProps {
@@ -51,6 +58,7 @@ const getCardColors = (tags: string[]) => {
 
 export default function NoteCard({ note, onDelete, onEdit, onShare }: NoteCardProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
   const [selectedTag, setSelectedTag] = useState(note.tags[0] || "work");
@@ -160,6 +168,52 @@ export default function NoteCard({ note, onDelete, onEdit, onShare }: NoteCardPr
             </>
           ) : (
             <>
+              {/* Preview button */}
+              <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="text-2xl font-bold mb-2 flex items-center gap-2">
+                      {note.title}
+                      {isShared && (
+                        <Badge variant="outline" className="text-xs">
+                          <Lock className="w-3 h-3 mr-1" />
+                          Shared
+                        </Badge>
+                      )}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    {isShared && note.owner && (
+                      <p className="text-sm text-gray-500">Shared by: {note.owner}</p>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {note.tags.map((tag, index) => (
+                        <Badge 
+                          key={index} 
+                          className={colors.badge}
+                          variant="outline"
+                        >
+                          {tag.charAt(0).toUpperCase() + tag.slice(1)}
+                        </Badge>
+                      ))}
+                    </div>
+                    <div className="prose max-w-none">
+                      <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                        {note.content}
+                      </p>
+                    </div>
+                    <div className="text-sm text-gray-500 pt-4 border-t">
+                      Last edited: {note.lastEdited ? new Date(note.lastEdited).toLocaleString() : "Just now"}
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              
               {canEdit && (
                 <Button size="sm" onClick={() => setIsEditing(true)} variant="outline">
                   <Edit2 className="w-4 h-4" />
