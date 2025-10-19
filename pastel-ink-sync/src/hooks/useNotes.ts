@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 
+//The messenger that talks to the backend API.
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 export type Note = {
@@ -11,6 +12,7 @@ export type Note = {
   owner?: string;
   isShared?: boolean;
   canEdit?: boolean;
+  sharedWith?: string[];  // List of usernames this note is shared with
 };
 
 export const useNotes = () => {
@@ -22,11 +24,11 @@ export const useNotes = () => {
 
   const fetchNotes = useCallback(async () => {
     if (!token) {
-      console.log("❌ fetchNotes - No token found");
+      console.log(" fetchNotes - No token found");
       return;
     }
     
-    console.log("📡 fetchNotes - Sending request with token:", token.substring(0, 20) + "...");
+    console.log(" fetchNotes - Sending request with token:", token.substring(0, 20) + "...");
     
     try {
       const res = await fetch(`${API_BASE_URL}/notes`, {
@@ -35,21 +37,21 @@ export const useNotes = () => {
         },
       });
       
-      console.log("📥 fetchNotes - Response status:", res.status);
+      console.log(" fetchNotes - Response status:", res.status);
       
       if (res.ok) {
         const data = await res.json();
-        console.log("✅ fetchNotes - Success! Data:", data);
+        console.log(" fetchNotes - Success! Data:", data);
         // Backend returns array directly, not wrapped in {notes: []}
         setNotes(Array.isArray(data) ? data : []);
       } else if (res.status === 401) {
-        console.log("🚫 fetchNotes - 401 Unauthorized! Redirecting to login...");
+        console.log(" fetchNotes - 401 Unauthorized! Redirecting to login...");
         // Token expired or invalid
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         window.location.href = "/login";
       } else {
-        console.log("⚠️ fetchNotes - Unexpected status:", res.status);
+        console.log(" fetchNotes - Unexpected status:", res.status);
       }
     } catch (error) {
       console.error("Error fetching notes:", error);
@@ -172,6 +174,7 @@ export const useNotes = () => {
       const data = await res.json();
 
       if (res.ok) {
+        await fetchNotes(); // Refresh notes to show updated sharedWith list
         return { success: true, message: data.message };
       } else {
         return { success: false, message: data.detail || "Failed to share note" };
@@ -194,6 +197,7 @@ export const useNotes = () => {
       });
 
       if (res.ok) {
+        await fetchNotes(); // Refresh notes to show updated sharedWith list
         return true;
       } else {
         console.error("Failed to unshare note");

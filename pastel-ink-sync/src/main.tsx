@@ -9,8 +9,9 @@ if (!GOOGLE_CLIENT_ID) {
 	console.warn("VITE_GOOGLE_CLIENT_ID is not set. Google OAuth will not be available.");
 }
 
+//starts the React application
 createRoot(document.getElementById("root")!).render(
 	<GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-		<App />
+		<App /> {/* loads the App.tsx*/}
 	</GoogleOAuthProvider>
 );

@@ -22,6 +22,13 @@ async def get_notes(
         except:
             tags = []
         
+        # Get list of users this note is shared with
+        shared_with = []
+        for shared in note.shared_instances:
+            shared_user = db.query(models.User).filter(models.User.id == shared.shared_with_user_id).first()
+            if shared_user:
+                shared_with.append(shared_user.username)
+        
         notes.append(schemas.NoteResponse(
             id=note.id,
             title=note.title,
@@ -30,7 +37,8 @@ async def get_notes(
             lastEdited=note.updated_at.isoformat() if note.updated_at else note.created_at.isoformat(),
             owner=current_user.username,
             isShared=False,
-            canEdit=True
+            canEdit=True,
+            sharedWith=shared_with
         ))
     
     return notes

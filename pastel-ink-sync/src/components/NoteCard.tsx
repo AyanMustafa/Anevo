@@ -103,6 +103,11 @@ export default function NoteCard({ note, onDelete, onEdit, onShare }: NoteCardPr
         {isShared && note.owner && (
           <p className="text-xs text-gray-500 mt-1">Shared by: {note.owner}</p>
         )}
+        {!isShared && note.sharedWith && note.sharedWith.length > 0 && (
+          <p className="text-xs text-gray-500 mt-1">
+            Shared with: {note.sharedWith.join(", ")}
+          </p>
+        )}
       </CardHeader>
       <CardContent>
         {isEditing ? (
@@ -190,6 +195,9 @@ export default function NoteCard({ note, onDelete, onEdit, onShare }: NoteCardPr
                   <div className="space-y-4">
                     {isShared && note.owner && (
                       <p className="text-sm text-gray-500">Shared by: {note.owner}</p>
+                    )}
+                    {!isShared && note.sharedWith && note.sharedWith.length > 0 && (
+                      <p className="text-sm text-gray-500">Shared with: {note.sharedWith.join(", ")}</p>
                     )}
                     <div className="flex flex-wrap gap-2">
                       {note.tags.map((tag, index) => (

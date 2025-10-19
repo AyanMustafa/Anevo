@@ -22,29 +22,32 @@ export default function Login() {
     setTimeout(() => setIsSliding(true), 100);
   }, []);
 
+  // What happens when you click "Sign In":
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
+      // send data to backend
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          identifier: identifier,
-          password: password,
+          identifier: identifier,// your email or username
+          password: password,// your password
         }),
       });
 
+      //get response from the backend
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.detail || "Login failed");
       }
 
-      // Store token and user data
+      // Store token and user data and save to the browser storage
       localStorage.setItem("token", data.access_token);
       localStorage.setItem("user", JSON.stringify(data.user));
 
@@ -57,7 +60,7 @@ export default function Login() {
       await new Promise((resolve) => setTimeout(resolve, 200));
       
       // Force a hard navigation to ensure fresh state
-      window.location.href = "/";
+      window.location.href = "/";// redirect to notes page
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : String(error);

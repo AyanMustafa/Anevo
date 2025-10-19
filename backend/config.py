@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
 
+#The configuration file - all important settings in one place.
 class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///./notes.db"

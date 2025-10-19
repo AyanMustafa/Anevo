@@ -50,6 +50,7 @@ class NoteResponse(BaseModel):
     owner: Optional[str] = None
     isShared: Optional[bool] = False
     canEdit: Optional[bool] = False
+    sharedWith: Optional[List[str]] = []  # List of usernames this note is shared with
 
 # Share Schemas
 class ShareNoteRequest(BaseModel):

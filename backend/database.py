@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from config import settings
 
 engine = create_engine(
-    settings.DATABASE_URL,
+    settings.DATABASE_URL, #<- opens the database file
     connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
 )
 
@@ -14,8 +14,8 @@ Base = declarative_base()
 
 def get_db():
     """Dependency to get database session"""
-    db = SessionLocal()
+    db = SessionLocal()# <- opening a connection
     try:
-        yield db
+        yield db # <- use the database 
     finally:
-        db.close()
+        db.close()# <- closing the connection

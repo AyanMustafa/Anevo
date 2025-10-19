@@ -25,7 +25,7 @@ const isAuthenticated = () => {
 };
 
 // Protected Route - redirect to login if not authenticated
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => { //checks if user is logged in inorder to access the notes page
   const authenticated = isAuthenticated();
   console.log("ProtectedRoute - authenticated:", authenticated);
   
@@ -65,7 +65,7 @@ const App = () => (
             }
           />
 
-          {/* Protected Routes */}
+          {/* Protected Routes (need login) */}
           <Route
             path="/"
             element={
